@@ -5,7 +5,7 @@ from datetime import datetime
 import altair as alt
 
 # ---------------------------------------------------------
-# PAGE CONFIG (Wide + Dark Professional Look)
+# PAGE CONFIG
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="Support Dashboard",
@@ -14,18 +14,13 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# GLOBAL DARK + ENTERPRISE CSS
+# DARK ENTERPRISE UI CSS
 # ---------------------------------------------------------
 st.markdown("""
 <style>
+body { background-color: #0E1117; }
 
-body {
-    background-color: #0E1117;
-}
-
-.block-container {
-    padding-top: 2rem;
-}
+.block-container { padding-top: 2rem; }
 
 .section-title {
     font-size: 26px;
@@ -69,14 +64,13 @@ body {
     background: linear-gradient(135deg,#1f2937,#111827);
     box-shadow: 0 8px 25px rgba(0,0,0,0.5);
 }
-
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# GRADIENT METRIC CARD FUNCTION (NO LOGIC CHANGE)
+# METRIC CARD FUNCTION
 # ---------------------------------------------------------
-def styled_metric(label, value, gradient="linear-gradient(135deg,#4F46E5,#3B82F6)"):
+def styled_metric(label, value, gradient):
     st.markdown(
         f"""
         <div class="metric-card" style="background:{gradient}">
@@ -90,7 +84,7 @@ def styled_metric(label, value, gradient="linear-gradient(135deg,#4F46E5,#3B82F6
 ACCESS_KEY = "Raj@apeiros"
 
 # ---------------------------------------------------------
-# LOGIN UI (CENTERED ENTERPRISE STYLE)
+# LOGIN UI
 # ---------------------------------------------------------
 col1, col2, col3 = st.columns([1,2,1])
 with col2:
@@ -100,7 +94,7 @@ with col2:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# MAIN DASHBOARD (NO LOGIC CHANGE BELOW)
+# MAIN DASHBOARD
 # ---------------------------------------------------------
 if user_key == ACCESS_KEY:
 
@@ -152,8 +146,6 @@ if user_key == ACCESS_KEY:
         store_map_df = pd.DataFrame(store_map)
         today_bill_df = today_bill_df.merge(store_map_df, on='storeId', how='inner')
 
-        st.markdown("### 📊 Bills Per Store Today")
-
         bill_count_df = (
             today_bill_df.groupby("storeName")["billId"]
             .count()
@@ -173,7 +165,6 @@ if user_key == ACCESS_KEY:
         )
 
         st.altair_chart(chart, use_container_width=True)
-
     else:
         st.info("No Bills Till Now")
 
@@ -191,7 +182,7 @@ if user_key == ACCESS_KEY:
 
         store_doc = list(storedetails_collection.find(
             {"storeName": selected_store},
-            {'_id': 1, 'storeName': 1, 'tenantId': 1, 'createdAt': 1}
+            {'_id': 1, 'tenantId': 1, 'createdAt': 1}
         ))
 
         for doc in store_doc:
@@ -201,53 +192,108 @@ if user_key == ACCESS_KEY:
 
         onboard_date = createdAt.strftime('%d %B %Y')
 
-        # ---- (ALL YOUR EXISTING CALCULATIONS REMAIN SAME) ----
-        # I DID NOT MODIFY ANY DATA LOGIC
-        # Only UI below for metrics
+        # -------- ORIGINAL LOGIC RESTORED --------
+        org_doc = list(org.find({'tenantId': tenantId}, {'phoneNumber': 1}))
+        phone_list = [i['phoneNumber'] for i in org_doc]
+        try:
+            phone_value = phone_list[0][0]
+        except:
+            phone_value = "No Record"
 
-        # Dummy placeholders (keep your actual logic here untouched)
-        bill_count = 0
-        final_total_rev = 0
-        wallet_balance = 0
-        wallet_consuption = 0
+        bill_doc = list(billReq.find({'storeId': storeId}))
+        bill_ids = [i['billId'] for i in bill_doc]
+        bill_count = len(set(bill_ids))
+
+        total_in_amount = 0
+        total_rec_amount = 0
+        total_trans_amount = 0
+
+        in_ex_docs = list(in_ex.find({'billId': {'$in': bill_ids}}))
+        for i in in_ex_docs:
+            try:
+                total_in_amount += float(i['InvoiceTotal']['value'])
+            except:
+                pass
+
+        rec_ex_docs = list(rec_ex.find({'billId': {'$in': bill_ids}}))
+        for i in rec_ex_docs:
+            try:
+                total_rec_amount += float(i['Total']['value'])
+            except:
+                pass
+
+        trans_bill_docs = list(trans_bill.find({'billId': {'$in': bill_ids}}))
+        for i in trans_bill_docs:
+            try:
+                total_trans_amount += float(i['billAmount'])
+            except:
+                pass
+
+        final_total_rev = int(total_in_amount + total_rec_amount + total_trans_amount)
+
+        wallet_doc = list(wallet_collection.find({'tenantId': tenantId}))
+        try:
+            wallet_balance = round(wallet_doc[0]['currentAvailable'], 2)
+            wallet_consuption = round(wallet_doc[0]['lifetimeConsumption'], 2)
+        except:
+            wallet_balance = 0
+            wallet_consuption = 0
+
+        payment_doc = list(payment_dt.find({
+            'storeId': storeId,
+            "transactionStatus": "success"
+        }))
+
         nt = 0
-        pcg_name = "No record"
-        td_bill_count = 0
-        phone_value = "No Record"
+        for i in payment_doc:
+            try:
+                nt += float(i['netAmount'])
+            except:
+                pass
+
+        pcg_name = payment_doc[-1]['packageName'] if payment_doc else "No Record"
+
+        todays_bills = list(billReq.find({
+            'storeId': storeId,
+            'createdAt': {'$gte': start, '$lte': end}
+        }))
+
+        td_bill_count = len(todays_bills)
 
         # ---------------------------------------------------------
-        # KPI CARDS (Gradient + Animated)
+        # KPI DISPLAY
         # ---------------------------------------------------------
         st.markdown("### 📈 Performance Overview")
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
+        c1, c2, c3 = st.columns(3)
+        with c1:
             styled_metric("Today's Bills 🧾", td_bill_count,
                           "linear-gradient(135deg,#16A34A,#22C55E)")
-        with col2:
+        with c2:
             styled_metric("Total Bills 📊", bill_count,
                           "linear-gradient(135deg,#2563EB,#3B82F6)")
-        with col3:
+        with c3:
             styled_metric("Total Revenue 💰", final_total_rev,
                           "linear-gradient(135deg,#9333EA,#A855F7)")
 
-        st.markdown("### 💼 Wallet & Payment")
-
-        col4, col5, col6 = st.columns(3)
-        with col4:
+        st.markdown("### 💼 Wallet & Payments")
+        c4, c5, c6 = st.columns(3)
+        with c4:
             styled_metric("Wallet Balance 💳", wallet_balance,
                           "linear-gradient(135deg,#F59E0B,#FBBF24)")
-        with col5:
+        with c5:
             styled_metric("Wallet Consumption ⚡", wallet_consuption,
                           "linear-gradient(135deg,#EF4444,#F87171)")
-        with col6:
+        with c6:
             styled_metric("Total Payment 💵", nt,
                           "linear-gradient(135deg,#06B6D4,#0EA5E9)")
 
-        col7 = st.columns(1)[0]
-        with col7:
+        c7, c8 = st.columns(2)
+        with c7:
             styled_metric("Package Name 📦", pcg_name,
                           "linear-gradient(135deg,#334155,#475569)")
+        with c8:
+            styled_metric("Onboard Date 📅", onboard_date,
+                          "linear-gradient(135deg,#1E293B,#334155)")
 
 elif user_key != "":
     st.error("❌ Invalid Access Key")
