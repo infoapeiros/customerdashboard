@@ -101,8 +101,47 @@ else:
     ))
 
     if bill_docs_bar:
-        df = pd.DataFrame(bill_docs_bar)
-        total_bills = df["billId"].nunique()
+
+    df = pd.DataFrame(bill_docs_bar)
+
+    store_ids = df["storeId"].unique().tolist()
+
+    store_map = list(storedetails_collection.find(
+        {'_id': {'$in': store_ids}},
+        {"_id": 1, "storeName": 1}
+    ))
+
+    store_df = pd.DataFrame(store_map)
+    store_df.rename(columns={"_id": "storeId"}, inplace=True)
+
+    df = df.merge(store_df, on="storeId")
+
+    total_bills = df["billId"].nunique()
+
+    # -------- Total Bill Card --------
+    st.markdown(f"""
+    <div class="card">
+        <div class="metric-title">Total Bills</div>
+        <div class="metric-value">{total_bills}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # -------- Store Wise Grouping --------
+    bill_count_df = (
+        df.groupby("storeName")["billId"]
+        .count()
+        .reset_index()
+        .rename(columns={"billId": "billCount"})
+    )
+
+    # -------- BAR CHART --------
+    chart = alt.Chart(bill_count_df).mark_bar().encode(
+        x=alt.X("storeName:N", sort="-y", title="Store"),
+        y=alt.Y("billCount:Q", title="Bills"),
+        tooltip=["storeName", "billCount"]
+    ).properties(height=400)
+
+    st.altair_chart(chart, use_container_width=True)
 
         col = st.columns(1)[0]
         with col:
