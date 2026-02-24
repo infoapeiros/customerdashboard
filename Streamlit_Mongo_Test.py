@@ -1,299 +1,190 @@
 import streamlit as st
-from pymongo import MongoClient
 import pandas as pd
-from datetime import datetime
 import altair as alt
+from datetime import datetime, timedelta
+import random
 
-# ---------------------------------------------------------
+# -------------------------------------------------
 # PAGE CONFIG
-# ---------------------------------------------------------
-st.set_page_config(
-    page_title="Support Dashboard",
-    page_icon="📊",
-    layout="wide"
-)
+# -------------------------------------------------
+st.set_page_config(page_title="Apeiros Admin Panel", layout="wide")
 
-# ---------------------------------------------------------
-# DARK ENTERPRISE UI CSS
-# ---------------------------------------------------------
+# -------------------------------------------------
+# CUSTOM CSS
+# -------------------------------------------------
 st.markdown("""
 <style>
-body { background-color: #0E1117; }
-
-.block-container { padding-top: 2rem; }
-
-.section-title {
-    font-size: 26px;
-    font-weight: 600;
-    color: #FFFFFF;
-    margin-bottom: 10px;
-}
-
-.divider {
-    border-bottom: 1px solid #2D3748;
-    margin-bottom: 25px;
-}
-
-.metric-card {
-    padding: 18px;
-    border-radius: 14px;
-    text-align: center;
+html, body, [class*="css"] {
+    background-color: #0E1117;
     color: white;
-    transition: all 0.3s ease-in-out;
 }
 
-.metric-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+/* Centered Container */
+.center-container {
+    max-width: 1200px;
+    margin: auto;
 }
 
-.metric-label {
-    font-size: 15px;
-    opacity: 0.8;
+/* Login Box */
+.login-box {
+    background-color: #1E2228;
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0px 0px 30px rgba(0,0,0,0.5);
+    width: 400px;
+    margin: auto;
+    margin-top: 150px;
+}
+
+/* Cards */
+.card {
+    background-color: #1E2228;
+    padding: 25px;
+    border-radius: 18px;
+    text-align: center;
+    box-shadow: 0px 4px 20px rgba(0,0,0,0.5);
+}
+
+.metric-title {
+    font-size:16px;
+    color:#AAAAAA;
 }
 
 .metric-value {
-    font-size: 30px;
-    font-weight: 700;
-    margin-top: 8px;
+    font-size:28px;
+    font-weight:bold;
 }
 
-.login-box {
-    padding: 40px;
-    border-radius: 16px;
-    background: linear-gradient(135deg,#1f2937,#111827);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+/* Section Title */
+.section-title {
+    font-size:24px;
+    margin-top:40px;
+    margin-bottom:20px;
+    color:#4CAF50;
+    text-align:center;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# METRIC CARD FUNCTION
-# ---------------------------------------------------------
-def styled_metric(label, value, gradient):
-    st.markdown(
-        f"""
-        <div class="metric-card" style="background:{gradient}">
-            <div class="metric-label">{label}</div>
-            <div class="metric-value">{value}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
 ACCESS_KEY = "Raj@apeiros"
 
-# ---------------------------------------------------------
-# LOGIN UI
-# ---------------------------------------------------------
-col1, col2, col3 = st.columns([1,2,1])
-with col2:
-    st.markdown("<div class='login-box'>", unsafe_allow_html=True)
-    st.markdown("<h2 style='text-align:center;color:white;'>🔐 Support Dashboard Login</h2>", unsafe_allow_html=True)
-    user_key = st.text_input("Enter Access Key", type="password")
-    st.markdown("</div>", unsafe_allow_html=True)
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-# ---------------------------------------------------------
+# -------------------------------------------------
+# LOGIN SCREEN
+# -------------------------------------------------
+if not st.session_state.logged_in:
+
+    with st.container():
+        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+        st.title("🔐 Admin Login")
+
+        key = st.text_input("Enter Access Key", type="password")
+
+        if st.button("Login"):
+            if key == ACCESS_KEY:
+                st.session_state.logged_in = True
+                st.rerun()
+            else:
+                st.error("Invalid Access Key")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# -------------------------------------------------
 # MAIN DASHBOARD
-# ---------------------------------------------------------
-if user_key == ACCESS_KEY:
+# -------------------------------------------------
+else:
 
-    mongo_uri = st.secrets.get("mongodb", {}).get("uri") if st.secrets else None
-    client = MongoClient(mongo_uri)
+    st.sidebar.title("⚙️ Admin Controls")
 
-    db_retail = client['apeirosretail']
-    db_bills = client['apeirosretaildataprocessing']
-    db_wallet = client['apeirosretailcustomermanagement']
+    start_date = st.sidebar.date_input("Start Date", datetime.today() - timedelta(days=30))
+    end_date = st.sidebar.date_input("End Date", datetime.today())
 
-    storedetails_collection = db_retail['storeDetails']
-    org = db_retail['organizationDetails']
-    billReq = db_bills['billRequest']
-    in_ex = db_bills['invoiceExtractedData']
-    rec_ex = db_bills['receiptExtractedData']
-    trans_bill = db_bills['billtransactions']
-    wallet_collection = db_wallet['promotionalMessageCredit']
-    payment_dt = db_retail['paymentDetails']
+    store_filter = st.sidebar.selectbox("Select Store", ["Panvel", "Mumbai", "Delhi", "Kolkata"])
 
-    # ---------------------------------------------------------
-    # TODAY BILL OVERVIEW
-    # ---------------------------------------------------------
-    st.markdown("<div class='section-title'>📅 Today's Bill Overview</div>", unsafe_allow_html=True)
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
 
-    today = datetime.today()
-    start = datetime(today.year, today.month, today.day)
-    end = datetime(today.year, today.month, today.day, 23, 59, 59)
+    st.markdown('<div class="center-container">', unsafe_allow_html=True)
 
-    bill_docs_bar = list(billReq.find(
-        {"createdAt": {"$gte": start, "$lte": end}},
-        {"billId": 1, "storeId": 1, "_id": 0}
-    ))
+    st.title("🚀 Apeiros SaaS Admin Panel")
 
-    if bill_docs_bar:
-        today_bill_df = pd.DataFrame(bill_docs_bar)
-        store_ids_bar = today_bill_df["storeId"].unique().tolist()
+    # Demo Data
+    dates = pd.date_range(start=start_date, end=end_date)
 
-        store_map = []
-        for i in list(storedetails_collection.find(
-            {'_id': {'$in': store_ids_bar}},
-            {"_id": 1, "storeName": 1}
-        )):
-            store_map.append({
-                "storeId": i['_id'],
-                "storeName": i['storeName']
-            })
+    data = pd.DataFrame({
+        "date": dates,
+        "revenue": [random.randint(3000, 20000) for _ in dates]
+    })
 
-        store_map_df = pd.DataFrame(store_map)
-        today_bill_df = today_bill_df.merge(store_map_df, on='storeId', how='inner')
+    leaderboard = pd.DataFrame({
+        "Store": ["Panvel", "Mumbai", "Delhi", "Kolkata"],
+        "Revenue": [250000, 420000, 180000, 310000],
+        "Bills": [450, 720, 300, 510],
+        "Phone": ["9876543210", "9123456780", "9988776655", "9090909090"]
+    }).sort_values("Revenue", ascending=False)
 
-        bill_count_df = (
-            today_bill_df.groupby("storeName")["billId"]
-            .count()
-            .reset_index()
-            .rename(columns={"billId": "billCount"})
+    selected_store_data = leaderboard[leaderboard["Store"] == store_filter].iloc[0]
+
+    total_revenue = leaderboard["Revenue"].sum()
+    total_bills = leaderboard["Bills"].sum()
+    total_stores = len(leaderboard)
+
+    # Card Function
+    def metric_card(title, value):
+        st.markdown(f"""
+        <div class="card">
+            <div class="metric-title">{title}</div>
+            <div class="metric-value">{value}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # OVERVIEW
+    st.markdown('<div class="section-title">📊 Overview</div>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        metric_card("Total Revenue 💰", f"₹ {total_revenue:,}")
+
+    with col2:
+        metric_card("Total Bills 🧾", total_bills)
+
+    with col3:
+        metric_card("Active Stores 🏬", total_stores)
+
+    # STORE DETAILS
+    st.markdown('<div class="section-title">📞 Selected Store Details</div>', unsafe_allow_html=True)
+    col4, col5, col6 = st.columns(3)
+
+    with col4:
+        metric_card("Store Name 🏬", selected_store_data["Store"])
+
+    with col5:
+        metric_card("Mobile Number 📱", selected_store_data["Phone"])
+
+    with col6:
+        metric_card("Store Revenue 💵", f"₹ {selected_store_data['Revenue']:,}")
+
+    # GRAPH
+    st.markdown('<div class="section-title">📈 Revenue Trend</div>', unsafe_allow_html=True)
+
+    chart = (
+        alt.Chart(data)
+        .mark_line(point=True)
+        .encode(
+            x="date:T",
+            y="revenue:Q",
+            tooltip=["date", "revenue"]
         )
+        .properties(height=400)
+    )
 
-        chart = (
-            alt.Chart(bill_count_df)
-            .mark_bar()
-            .encode(
-                x=alt.X("storeName:N", sort="-y"),
-                y=alt.Y("billCount:Q"),
-                tooltip=["storeName", "billCount"]
-            )
-            .properties(height=400)
-        )
+    st.altair_chart(chart, use_container_width=True)
 
-        st.altair_chart(chart, use_container_width=True)
-    else:
-        st.info("No Bills Till Now")
+    # LEADERBOARD
+    st.markdown('<div class="section-title">🏆 Top Performing Stores</div>', unsafe_allow_html=True)
+    st.dataframe(leaderboard, use_container_width=True)
 
-    # ---------------------------------------------------------
-    # STORE INSIGHTS
-    # ---------------------------------------------------------
-    st.markdown("<div class='section-title'>🏬 Store Insights</div>", unsafe_allow_html=True)
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-
-    store_names = storedetails_collection.distinct("storeName")
-    ind = store_names.index('HP World Panvel')
-    selected_store = st.selectbox("Select Store", store_names, index=ind)
-
-    if selected_store:
-
-        store_doc = list(storedetails_collection.find(
-            {"storeName": selected_store},
-            {'_id': 1, 'tenantId': 1, 'createdAt': 1}
-        ))
-
-        for doc in store_doc:
-            storeId = doc['_id']
-            tenantId = doc['tenantId']
-            createdAt = doc['createdAt']
-
-        onboard_date = createdAt.strftime('%d %B %Y')
-
-        # -------- ORIGINAL LOGIC RESTORED --------
-        org_doc = list(org.find({'tenantId': tenantId}, {'phoneNumber': 1}))
-        phone_list = [i['phoneNumber'] for i in org_doc]
-        try:
-            phone_value = phone_list[0][0]
-        except:
-            phone_value = "No Record"
-
-        bill_doc = list(billReq.find({'storeId': storeId}))
-        bill_ids = [i['billId'] for i in bill_doc]
-        bill_count = len(set(bill_ids))
-
-        total_in_amount = 0
-        total_rec_amount = 0
-        total_trans_amount = 0
-
-        in_ex_docs = list(in_ex.find({'billId': {'$in': bill_ids}}))
-        for i in in_ex_docs:
-            try:
-                total_in_amount += float(i['InvoiceTotal']['value'])
-            except:
-                pass
-
-        rec_ex_docs = list(rec_ex.find({'billId': {'$in': bill_ids}}))
-        for i in rec_ex_docs:
-            try:
-                total_rec_amount += float(i['Total']['value'])
-            except:
-                pass
-
-        trans_bill_docs = list(trans_bill.find({'billId': {'$in': bill_ids}}))
-        for i in trans_bill_docs:
-            try:
-                total_trans_amount += float(i['billAmount'])
-            except:
-                pass
-
-        final_total_rev = int(total_in_amount + total_rec_amount + total_trans_amount)
-
-        wallet_doc = list(wallet_collection.find({'tenantId': tenantId}))
-        try:
-            wallet_balance = round(wallet_doc[0]['currentAvailable'], 2)
-            wallet_consuption = round(wallet_doc[0]['lifetimeConsumption'], 2)
-        except:
-            wallet_balance = 0
-            wallet_consuption = 0
-
-        payment_doc = list(payment_dt.find({
-            'storeId': storeId,
-            "transactionStatus": "success"
-        }))
-
-        nt = 0
-        for i in payment_doc:
-            try:
-                nt += float(i['netAmount'])
-            except:
-                pass
-
-        pcg_name = payment_doc[-1]['packageName'] if payment_doc else "No Record"
-
-        todays_bills = list(billReq.find({
-            'storeId': storeId,
-            'createdAt': {'$gte': start, '$lte': end}
-        }))
-
-        td_bill_count = len(todays_bills)
-
-        # ---------------------------------------------------------
-        # KPI DISPLAY
-        # ---------------------------------------------------------
-        st.markdown("### 📈 Performance Overview")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            styled_metric("Today's Bills 🧾", td_bill_count,
-                          "linear-gradient(135deg,#16A34A,#22C55E)")
-        with c2:
-            styled_metric("Total Bills 📊", bill_count,
-                          "linear-gradient(135deg,#2563EB,#3B82F6)")
-        with c3:
-            styled_metric("Total Revenue 💰", final_total_rev,
-                          "linear-gradient(135deg,#9333EA,#A855F7)")
-
-        st.markdown("### 💼 Wallet & Payments")
-        c4, c5, c6 = st.columns(3)
-        with c4:
-            styled_metric("Wallet Balance 💳", wallet_balance,
-                          "linear-gradient(135deg,#F59E0B,#FBBF24)")
-        with c5:
-            styled_metric("Wallet Consumption ⚡", wallet_consuption,
-                          "linear-gradient(135deg,#EF4444,#F87171)")
-        with c6:
-            styled_metric("Total Payment 💵", nt,
-                          "linear-gradient(135deg,#06B6D4,#0EA5E9)")
-
-        c7, c8 = st.columns(2)
-        with c7:
-            styled_metric("Package Name 📦", pcg_name,
-                          "linear-gradient(135deg,#334155,#475569)")
-        with c8:
-            styled_metric("Onboard Date 📅", onboard_date,
-                          "linear-gradient(135deg,#1E293B,#334155)")
-
-elif user_key != "":
-    st.error("❌ Invalid Access Key")
+    st.markdown('</div>', unsafe_allow_html=True)
