@@ -92,93 +92,54 @@ else:
 
     st.title("🚀 Apeiros Support Dashboard")
 
-   # ---------------- BILL GRAPH ----------------
-st.markdown('<div class="section-title">📊 Bill Count</div>', unsafe_allow_html=True)
+    # ---------------- BILL GRAPH ----------------
+    st.markdown('<div class="section-title">📊 Bill Count</div>', unsafe_allow_html=True)
 
-bill_docs_bar = list(billReq.find(
-    {"createdAt": {"$gte": start_datetime, "$lte": end_datetime}},
-    {"billId": 1, "storeId": 1, "_id": 0}
-))
-
-if bill_docs_bar:
-
-    df = pd.DataFrame(bill_docs_bar)
-
-    store_ids = df["storeId"].unique().tolist()
-
-    store_map = list(storedetails_collection.find(
-        {'_id': {'$in': store_ids}},
-        {"_id": 1, "storeName": 1}
+    bill_docs_bar = list(billReq.find(
+        {"createdAt": {"$gte": start_datetime, "$lte": end_datetime}},
+        {"billId": 1, "storeId": 1, "_id": 0}
     ))
 
-    store_df = pd.DataFrame(store_map)
-    store_df.rename(columns={"_id": "storeId"}, inplace=True)
+    if bill_docs_bar:
 
-    df = df.merge(store_df, on="storeId")
+        df = pd.DataFrame(bill_docs_bar)
 
-    total_bills = df["billId"].nunique()
+        store_ids = df["storeId"].unique().tolist()
 
-    # -------- Total Bill Card --------
-    st.markdown(f"""
-    <div class="card">
-        <div class="metric-title">Total Bills</div>
-        <div class="metric-value">{total_bills}</div>
-    </div>
-    """, unsafe_allow_html=True)
+        store_map = list(storedetails_collection.find(
+            {'_id': {'$in': store_ids}},
+            {"_id": 1, "storeName": 1}
+        ))
 
-    # -------- Store Wise Grouping --------
-    bill_count_df = (
-        df.groupby("storeName")["billId"]
-        .count()
-        .reset_index()
-        .rename(columns={"billId": "billCount"})
-    )
+        store_df = pd.DataFrame(store_map)
+        store_df.rename(columns={"_id": "storeId"}, inplace=True)
 
-    # -------- BAR CHART --------
-    chart = alt.Chart(bill_count_df).mark_bar().encode(
-        x=alt.X("storeName:N", sort="-y", title="Store"),
-        y=alt.Y("billCount:Q", title="Bills"),
-        tooltip=["storeName", "billCount"]
-    ).properties(height=400)
+        df = df.merge(store_df, on="storeId")
 
-    st.altair_chart(chart, use_container_width=True)
+        total_bills = df["billId"].nunique()
 
-else:
-    st.info("No Bills Found")
+        st.markdown(f"""
+        <div class="card">
+            <div class="metric-title">Total Bills</div>
+            <div class="metric-value">{total_bills}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # -------- Total Bill Card --------
-    st.markdown(f"""
-    <div class="card">
-        <div class="metric-title">Total Bills</div>
-        <div class="metric-value">{total_bills}</div>
-    </div>
-    """, unsafe_allow_html=True)
+        bill_count_df = (
+            df.groupby("storeName")["billId"]
+            .count()
+            .reset_index()
+            .rename(columns={"billId": "billCount"})
+        )
 
-    # -------- Store Wise Grouping --------
-    bill_count_df = (
-        df.groupby("storeName")["billId"]
-        .count()
-        .reset_index()
-        .rename(columns={"billId": "billCount"})
-    )
+        chart = alt.Chart(bill_count_df).mark_bar().encode(
+            x=alt.X("storeName:N", sort="-y", title="Store"),
+            y=alt.Y("billCount:Q", title="Bills"),
+            tooltip=["storeName", "billCount"]
+        ).properties(height=400)
 
-    # -------- BAR CHART --------
-    chart = alt.Chart(bill_count_df).mark_bar().encode(
-        x=alt.X("storeName:N", sort="-y", title="Store"),
-        y=alt.Y("billCount:Q", title="Bills"),
-        tooltip=["storeName", "billCount"]
-    ).properties(height=400)
+        st.altair_chart(chart, use_container_width=True)
 
-    st.altair_chart(chart, use_container_width=True)
-
-        col = st.columns(1)[0]
-        with col:
-            st.markdown(f"""
-            <div class="card">
-                <div class="metric-title">Total Bills</div>
-                <div class="metric-value">{total_bills}</div>
-            </div>
-            """, unsafe_allow_html=True)
     else:
         st.info("No Bills Found")
 
