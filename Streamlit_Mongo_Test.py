@@ -92,15 +92,15 @@ else:
 
     st.title("🚀 Apeiros Support Dashboard")
 
-    # ---------------- BILL GRAPH ----------------
-    st.markdown('<div class="section-title">📊 Bill Count</div>', unsafe_allow_html=True)
+   # ---------------- BILL GRAPH ----------------
+st.markdown('<div class="section-title">📊 Bill Count</div>', unsafe_allow_html=True)
 
-    bill_docs_bar = list(billReq.find(
-        {"createdAt": {"$gte": start_datetime, "$lte": end_datetime}},
-        {"billId": 1, "storeId": 1, "_id": 0}
-    ))
+bill_docs_bar = list(billReq.find(
+    {"createdAt": {"$gte": start_datetime, "$lte": end_datetime}},
+    {"billId": 1, "storeId": 1, "_id": 0}
+))
 
-    if bill_docs_bar:
+if bill_docs_bar:
 
     df = pd.DataFrame(bill_docs_bar)
 
@@ -117,6 +117,34 @@ else:
     df = df.merge(store_df, on="storeId")
 
     total_bills = df["billId"].nunique()
+
+    # -------- Total Bill Card --------
+    st.markdown(f"""
+    <div class="card">
+        <div class="metric-title">Total Bills</div>
+        <div class="metric-value">{total_bills}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # -------- Store Wise Grouping --------
+    bill_count_df = (
+        df.groupby("storeName")["billId"]
+        .count()
+        .reset_index()
+        .rename(columns={"billId": "billCount"})
+    )
+
+    # -------- BAR CHART --------
+    chart = alt.Chart(bill_count_df).mark_bar().encode(
+        x=alt.X("storeName:N", sort="-y", title="Store"),
+        y=alt.Y("billCount:Q", title="Bills"),
+        tooltip=["storeName", "billCount"]
+    ).properties(height=400)
+
+    st.altair_chart(chart, use_container_width=True)
+
+else:
+    st.info("No Bills Found")
 
     # -------- Total Bill Card --------
     st.markdown(f"""
